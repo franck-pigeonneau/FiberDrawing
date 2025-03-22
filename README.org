@@ -1,0 +1,65 @@
+#+title:  Numerical method solving the lubrication model of fiber drawing
+#+author: Franck Pigeonneau, Mines Paris, PSL - CEMEF
+#+date:   2025-03-22
+
+* Description of the program
+
+This program determines the profil of the fiber heating in the drawing furnage. A lubrication model is used in steady-state regime. The heating of the fiber is taken into account. 
+
+The program is decomposed in various steps:
+    
+1. Input of physical and numerical parameters
+2. Computation of the radiative flux and the liner temperature
+3. Determination of a, T, qa, Biconv
+4. Heating rate of the fiber
+5. Plotting
+6. Save of the results
+
+The model is described in detail in ref. [1].
+
+To easy change the glass properties, the glass liner chatacteristics, the working conditions and numerical parameters are gathered in csv files. Here, these files are given for
+our own applications.
+
+* Constitution of the repository
+
+** Python files:
+
+- drawing.py
+- emissivityfibre.py
+- etanorm.py
+- fiberradius.py
+- finitediff1order.py
+- lubricationsolution.py
+- neckdownregiondiameter.py
+- radiativeabsorption.py
+- radiativekernels.py
+- radiativeliner.py
+- temperatureglassliner.py
+- thermalsolverfinitediff.py
+- thermalsource.py
+- viewfactor.py
+- glassproperties.py
+- airproperties.py
+
+** csv files:
+
+- glass.csv         
+- numerics.csv
+- glassliner.csv
+- working.csv
+- kappaSiO2vslmbd.csv
+
+
+* Requirement
+
+The modules required to run this program are:
+    
+- numpy;
+- matplotlib;
+- pandas;
+- os;
+- scipy.
+
+* References
+
+[1] F. Pigeonneau, Z. Lu & W. Blanc (2025). Thermal and mechanic behaviors of optic silica glass fiber during the drawing process, Int. J. Heat Mass Transfer, under review.
