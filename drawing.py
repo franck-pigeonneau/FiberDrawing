@@ -32,7 +32,7 @@ The modules required to run this program are:
 
 References:
 
-[1] F. Pigeonneau, Z. Lu & W. Blanc (2025). Thermal and mechanic behaviors of 
+[1] F. Pigeonneau, Z. Lu, M. Ude & W. Blanc (2025). Thermal and mechanic behaviors of 
 optic silica glass fiber during the drawing process, Int. J. Heat Mass Transfer,
 under review.
 
@@ -91,6 +91,7 @@ t: Residence time of the glass in the liner
 # ---------------------------------
 
 import numpy as np
+import scipy as sp
 import matplotlib.pyplot as plt
 import pandas as pd
 import os
@@ -110,8 +111,10 @@ from scipy.constants import physical_constants
 from glassproperties import Tsoft
 from glassproperties import Tglass
 from glassproperties import muVFT
-from airproperties import nuair
-from airproperties import lambdaair
+from argonproperties import nuAr
+from argonproperties import lambdaAr
+from argonproperties import rhoAr
+from opticalconstantsSiO2 import nkappaSiO2
 from radiativeliner import radiativeliner
 from lubricationsolution import lubricationsolution
 from finitediff1order import FiniteDiff1order
@@ -174,9 +177,6 @@ BVFT=dglass['BVFT'].values[iglass]
 print('BVFT=',BVFT)
 TVFT=dglass['TVFT'].values[iglass]
 print('TVFT=',TVFT)
-dkappa=pd.read_csv('kappaSiO2vslmbd.csv')
-wavelength=dkappa['lambda'].values
-kappa=dkappa['kappa'].values
 
 # Softening & glass transition temperature
 Ts=Tsoft(AVFT,BVFT,TVFT)
@@ -184,9 +184,9 @@ print('Ts=',Ts)
 Tg=Tglass(AVFT,BVFT,TVFT)
 print('Tg=',Tg)
 
-# Air properties at T=Ts
-nuairTs=nuair(P,Ts)
-kairTs=lambdaair(P,Ts)
+# Argon properties at T=Ts
+nuArTs=nuAr(Ts)
+kArTs=lambdaAr(Ts)
 
 # Numerical parameters
 dnum=pd.read_csv('numerics.csv',index_col=0)
@@ -200,6 +200,17 @@ z=np.linspace(0,1.,N)
 # Temperature normalised by Ts
 Te=dnum['Te'].values[0]
 Tmax/=Ts
+
+# Radiative properties of silica
+dkappa=pd.read_csv('kappaSiO2vslmbd.csv')
+lmbdSiO2=dkappa['lambda'].values
+kappaSiO2=dkappa['kappa'].values
+lmbdM=2.898e-3/(Ts*Tmax)
+lmbdmin=0.5*lmbdM
+lmbdmax=7.*lmbdM
+Nkappa=dnum['Nkappa'].values[0]
+wavelength=np.linspace(lmbdmin,lmbdmax,Nkappa)
+n,kappa=nkappaSiO2(wavelength,lmbdSiO2,kappaSiO2)
 
 # Dimensionless numbers
 # ---------------------
@@ -222,7 +233,9 @@ print('Pe=',Pe)
 Birad=sigma*Ts**3*L**2/(lmbd*a0)
 print('Birad=',Birad)
 # Pre-factor of convective Biot number
-aBiconv=0.21*(L/a0)**2*alpha**(2./3.)*(kairTs/lmbd)*(2.*a0*UL/nuairTs)**(1./3.)
+aBiconv=0.21*(L/a0)**2*(kArTs/lmbd)*(2.*a0*UL/nuArTs)**(1./3.)*alpha**(2./3.)
+# Characteristic velocity of Argon flow
+UAr0=mdotAr/(np.pi*a0**2*rhoAr(Ts)*UL)
 
 # Dimensionless dimensions
 # ------------------------
@@ -237,7 +250,7 @@ b/=L
 # 2. Computation of the radiative flux and the liner temperature
 # --------------------------------------------------------------
 
-Phiwall,Twall=radiativeliner(N,b,Linlet,Lheating,Lexit,Te,Tmax,epswall,beta,Plot,SaveFig)
+Phiwall,Twall=radiativeliner(N,b,L,Linlet,Lheating,Lexit,Ts,Te,Tmax,epswall,beta,Plot,SaveFig)
 
 # ------------------------------------
 # 3. Determination of a, T, qa, Biconv
@@ -269,9 +282,22 @@ dUdz=FiniteDiff1order(dz,U)
 F=3.*a0**2*(UL/L)*muVFT(Ts*T,AVFT,BVFT,TVFT)*dUdz*np.pi*a**2
 print('F=',F[int(N/2)])
 
-# Determination of the amplitude of the inertia and capillary forces
+# Determination of the amplitude of the gravity, inertia and capillary forces
+# ---------------------------------------------------------------------------
+
+# Determination of the gravity force
+Fgra=np.zeros(N)
+for i in range(N-1):
+    Fgra[i]=sp.integrate.trapezoid(a[i:]**2,z[i:])
+#end for
+Fgra*=rho*g*np.pi*a0**2*L
+
+#Inertia
+Finer=rho*(a0*a)**2*(UL*U)**2*np.pi
+
+# Surface tension
 dadz=FiniteDiff1order(dz,a)
-Fcap=-2.*gamma*a0*a*np.pi/np.sqrt(1.+(a0*dadz/L)**2)
+Fcap=2.*gamma*a0*a*np.pi/np.sqrt(1.+(a0*dadz/L)**2)
 print('max Fcap : ', np.max(np.abs(Fcap)))
 
 # Time residence
@@ -314,10 +340,14 @@ if (Plot):
     ax3.set_ylabel(r'$\frac{dT}{dt}$ (K/s)')
 
     fig4,ax4=plt.subplots()
-    ax4.plot(z[:-3]*L,F[:-3],'k',label='Num. sol.')
+    ax4.semilogy(z*L,F,'k',label='Viscous')
+    ax4.semilogy(z*L,Fcap,'b',label='Capillary')
+    ax4.semilogy(z*L,Fgra,'g',label='Gravity')
+    ax4.semilogy(z*L,Finer,'r',label='Inertia')
     ax4.set_xlabel('$z$ (m)')
     ax4.set_ylabel(r'$F$ (N)')
-    ax4.set_ylim((0.8*np.min(F),2*np.min(F)))
+    ax4.legend(loc=0)
+    ax4.set_ylim((0.8*np.min(Finer),2*np.min(F)))
     
     # Computation of the radiative and convective thermal source terms
     qe=np.zeros(N)
@@ -329,10 +359,11 @@ if (Plot):
     phiconv=-2.*Biconv*a*(T-Twall)
     
     fig5,ax5=plt.subplots()
-    ax5.plot(z,phirad,'k',label=r'Radiative flux',linewidth=2)
-    ax5.plot(z,phiconv,'r',label=r'Convective flux',linewidth=2)
-    ax5.set_xlabel(r'$\bar{z}$')
+    ax5.plot(z*L,phirad,'k',label=r'Radiative flux',linewidth=2)
+    ax5.plot(z*L,phiconv,'r',label=r'Convective flux',linewidth=2)
+    ax5.set_xlabel(r'$z$ (m)')
     ax5.set_ylabel(r'$\varphi$')
+    ax5.set_ylim(bottom=-25)
     ax5.legend(loc=0)
     
     fig6,ax6=plt.subplots()
