@@ -234,8 +234,6 @@ Birad=sigma*Ts**3*L**2/(lmbd*a0)
 print('Birad=',Birad)
 # Pre-factor of convective Biot number
 aBiconv=0.21*(L/a0)**2*(kArTs/lmbd)*(2.*a0*UL/nuArTs)**(1./3.)*alpha**(2./3.)
-# Characteristic velocity of Argon flow
-UAr0=mdotAr/(np.pi*a0**2*rhoAr(Ts)*UL)
 
 # Dimensionless dimensions
 # ------------------------
